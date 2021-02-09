@@ -44,7 +44,7 @@ function main()
 
 	echo ""
 	echo "[connect by cli]"
-	echo "mysql -h$TARGET_ADDRESS -uUSERID -pPASSWORD"
+	echo "mysql -h127.0.0.1 -uUSERID -pPASSWORD"
 	echo ""
 	read -rsn1 -p "Press any key to close session."
 	echo ""
