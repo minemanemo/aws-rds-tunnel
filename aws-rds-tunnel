@@ -1,0 +1,67 @@
+#! /bin/bash
+
+ARGS_LEN="$#"
+INSTANCE_ID="$1"
+AVAILABILITY_ZONE="$2"
+
+MY_PORT="$3"
+TARGET_ADDRESS="$4"
+TARGET_PORT="$5"
+
+KEY_PREFIX="ternel"
+KEY_PATH="$KEY_PREFIX"
+PUB_KEY_PATH="$KEY_PREFIX.pub"
+SOCK_PATH="ssm-tunneling.sock"
+
+
+function print_help()
+{
+	echo "useage: $0 instance_id avalablity_zone local_port target_rds_dns target_rds_port"
+}
+
+function prev_step()
+{
+	rm $KEY_PATH $PUB_KEY_PATH $SOCK_PATH 2> /dev/null
+	ssh-keygen -t rsa -f $KEY_PREFIX -N '' > /dev/null
+	echo "" 
+	trap cleanup EXIT
+}
+
+function main()
+{
+	aws ec2-instance-connect send-ssh-public-key \
+		--instance-id $INSTANCE_ID \
+		--availability-zone $AVAILABILITY_ZONE \
+		--instance-os-user ec2-user \
+		--ssh-public-key file://$PUB_KEY_PATH > /dev/null
+
+	ssh -i $KEY_PATH -N -f -M \
+		-S $SOCK_PATH \
+		-L $MY_PORT:$TARGET_ADDRESS:$TARGET_PORT ec2-user@$INSTANCE_ID \
+		-o "UserKnownHostsFile=/dev/null" \
+		-o "StrictHostKeyChecking=no" \
+		-o ProxyCommand="aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p"
+
+	echo ""
+	echo "[connect by cli]"
+	echo "mysql -h$TARGET_ADDRESS -uUSERID -pPASSWORD"
+	echo ""
+	read -rsn1 -p "Press any key to close session."
+	echo ""
+}
+
+function cleanup()
+{
+	ssh -O exit -S $SOCK_PATH *
+	rm $KEY_PATH $PUB_KEY_PATH
+}
+
+
+if [ "$ARGS_LEN" != "5" ];
+then
+	print_help
+	exit 1
+fi
+prev_step
+main
+
